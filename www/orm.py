@@ -59,7 +59,7 @@ class Field(object):
         self.default = default
 
     def __str__(self):
-        return '<%s,%s:%s>' % (self.__class__.__name__, self.__class__.column_type, self.__class__.name)
+        return '<%s,%s:%s>' % (self.__class__.__name__, self.column_type, self.name)
 
 
 class StringField(Field):
@@ -74,16 +74,17 @@ class IntegerField(Field):
 
 class BooleanField(Field):
     def __init__(self,name=None,default=False,ddl='boolean'):
-        super().__init__(name,ddl,default)
+        super().__init__(name,ddl,False,default)
 
 
-def FloatField(Field):
-    def __init__(self,name=None,primaryKey=False,default=0.0,ddl="real"):
-        super().__init__(name,ddl,primaryKey,default)
+class FloatField(Field):
 
-def TextField(Field):
+    def __init__(self,name=None,primary_key=False,default=0.0,ddl='real'):
+        super().__init__(name,ddl,primary_key,default)
+
+class TextField(Field):
     def __init__(self,name=None,default=None,ddl='txt'):
-        super().init(name,ddl,default)
+        super().__init__(name,ddl,False,default)
 
 
 def create_args_string(num):
@@ -93,9 +94,10 @@ def create_args_string(num):
     return ','.join(L)
 
 
+# Me: 拓展/替换类的属性,拓展或替换 增,删,改,查,table,mapping,primary_key等属性
 class ModelMetaclass(type):
-    # Me: 拓展/替换类的属性,拓展或替换 增,删,改,查,table,mapping,primary_key等属性
-    def __init__(cls, name, bases, attrs):
+
+    def __new__(cls, name, bases, attrs):
         # 排除Model本身
         if name == 'Model':
             return type.__new__(cls, name, bases, attrs)
@@ -108,7 +110,7 @@ class ModelMetaclass(type):
         primaryKey = None
         for k, v in attrs.items():
             if isinstance(v, Field):
-                logging.info('found mapping: %s ==> %s' (k, v))
+                logging.info('found mapping: %s ==> %s' % (k, v))
                 mappings[k] = v
                 if v.primary_key:
                     # 找到主键
@@ -167,9 +169,8 @@ class Model(dict,metaclass=ModelMetaclass):
 
     # classmethod修饰符对应的函数不需要实例化，不需要 self 参数，但第一个参数需要是表示自身类的 cls 参数，可以来调用类的属性，类的方法，实例化对象等。
     @classmethod
-    def find(cls, pk):
-        # find object by primary key
-        rs = await select('%s where `%s`=?' % (cls.__select__,cls.__primary_key__, [pk], 1))
+    async def find(cls, pk):
+        rs = await select('%s where `%s`=?' % (cls.__select__,cls.__primary_key__), [pk], 1)
         if len(rs) == 0:
             return None
         else:
