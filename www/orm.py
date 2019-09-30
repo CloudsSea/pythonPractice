@@ -43,9 +43,11 @@ async def execute(sql, args):
     with (await __pool) as conn:
         try:
             cur = await conn.cursor(aiomysql.DictCursor)
-            await cur.execute(sql.replace('?', '%s') % args)
+            print(sql)
+            print(args.__str__())
+            await cur.execute(sql.replace('?', '%s'), args)
             affected = cur.rowcount
-            await cur.close
+            await cur.close()
         except BaseException as e:
             raise
         return affected
@@ -125,7 +127,7 @@ class ModelMetaclass(type):
             # pop掉,然后后面替换?
             attrs.pop(k)
         escaped_fields = list(map(lambda f: '`%s`' % f, fields))
-        attrs['__mapping__'] = mappings
+        attrs['__mappings__'] = mappings
         attrs['__table__'] = tableName
         attrs['__primary_key__'] = primaryKey  # 主键属性名
         attrs['__fields__'] = fields  # 除主键外的属性名
@@ -157,7 +159,7 @@ class Model(dict,metaclass=ModelMetaclass):
     def getValue(self,key):
         return getattr(self,key,None)
 
-    def setValueOrDefault(self,key):
+    def getValueOrDefault(self,key):
         value = getattr(self, key, None)
         if value is None:
             field = self.__mappings__[key]
@@ -205,7 +207,7 @@ class Model(dict,metaclass=ModelMetaclass):
         rs = await select(' '.join(sql),args)
         return [cls(**r) for r in rs]
 
-    async  def findNumber(cls, selecteField,where=None,args=None):
+    async def findNumber(cls, selecteField,where=None,args=None):
         sql = ['select %s _num_ from `%s` ' % (selecteField,cls.__table__)]
         if where:
             sql.append('where')
@@ -215,11 +217,8 @@ class Model(dict,metaclass=ModelMetaclass):
             return None
         return rs[0]['_num_']
 
-
-
-
     async def save(self):
-        args = list(map(self.getVauleOrDefault, self.__fields__))
+        args = list(map(self.getValueOrDefault, self.__fields__))
         #主键在参数的最后一个还得出现一次
         args.append(self.getValueOrDefault(self.__primary_key__))
         rows = await execute(self.__insert__,args)
